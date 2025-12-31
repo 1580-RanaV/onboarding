@@ -515,7 +515,7 @@ export default function Home() {
             </div>
 
             {/* Path Options - Side by Side */}
-            <div className="grid grid-cols-2 gap-6 px-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 px-2">
               {/* Marketer Option */}
               <div
                 onClick={() => setSelectedPath('marketer')}
@@ -665,7 +665,7 @@ export default function Home() {
                 </div>
 
             {/* Integration Tools Grid */}
-            <div className="grid grid-cols-6 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
               {/* HubSpot */}
               <div
                 onClick={() => toggleIntegration('hubspot')}
@@ -924,9 +924,9 @@ export default function Home() {
   return (
                   <div 
                     key={toolKey}
-                    className="flex items-center justify-between p-4 border border-gray-200 rounded-sm bg-white"
+                    className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 border border-gray-200 rounded-sm bg-white gap-3"
                   >
-                    <div className="flex items-center gap-4 flex-1">
+                    <div className="flex items-start sm:items-center gap-4 flex-1">
                       {/* Logo */}
                       <div className="w-12 h-12 flex items-center justify-center shrink-0">
                         {tool.logo ? (
@@ -967,7 +967,7 @@ export default function Home() {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex items-center gap-3 ml-4">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto sm:ml-4">
                       {isConnected ? (
                         <div className="flex items-center gap-2 text-green-600">
                           <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -979,14 +979,14 @@ export default function Home() {
                         <>
                           <button
                             onClick={() => handleConnectClick(toolKey)}
-                            className="px-4 py-2 rounded-sm text-sm font-medium text-white transition-colors"
+                            className="px-4 py-2 rounded-sm text-sm font-medium text-white transition-colors w-full sm:w-auto text-center"
                             style={{ backgroundColor: '#0080FF' }}
                             onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#0066CC'}
                             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#0080FF'}
                           >
                             Connect
                           </button>
-                          <button className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1">
+                          <button className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1 w-full sm:w-auto justify-center sm:justify-start">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                             </svg>
@@ -1083,7 +1083,7 @@ export default function Home() {
                 </div>
 
                 {/* Communication Styles Grid */}
-                <div className="grid grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {/* Default */}
                   <div
                     onClick={() => setSelectedCommunicationStyle('default')}
@@ -1508,7 +1508,7 @@ export default function Home() {
               {/* Personas Row - 4 columns */}
               <div>
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Personas</p>
-                <div className="grid grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                   {buyerPersonas.map((persona) => (
                     <div
                       key={persona.id}

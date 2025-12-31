@@ -88,7 +88,7 @@ export default function Stepper({
           <div
             className={`sticky top-0 z-20 w-full bg-white/95 backdrop-blur-sm ${stepCircleContainerClassName}`}
           >
-            <div className={`${stepContainerClassName} flex w-full items-center px-8 py-6`}>
+            <div className={`${stepContainerClassName} flex w-full items-center px-4 py-4 sm:px-8 sm:py-6`}>
               {stepsArray.map((_, index) => {
                 const stepNumber = index + 1;
                 const isNotLastStep = index < totalSteps - 1;
@@ -126,7 +126,7 @@ export default function Stepper({
               isCompleted={isCompleted}
               currentStep={currentStep}
               direction={direction}
-              className={`space-y-2 px-8 w-full max-w-3xl mx-auto ${contentClassName}`}
+              className={`space-y-2 px-4 sm:px-8 w-full max-w-3xl mx-auto ${contentClassName}`}
             >
               <div className="w-full">
                 {stepsArray[currentStep - 1]}
@@ -136,7 +136,7 @@ export default function Stepper({
 
           {!isCompleted && (
             <div
-              className={`sticky bottom-0 w-full bg-white/95 px-8 pb-8 pt-4 backdrop-blur-sm ${footerClassName}`}
+              className={`sticky bottom-0 w-full bg-white/95 px-4 sm:px-8 pb-6 sm:pb-8 pt-4 backdrop-blur-sm ${footerClassName}`}
             >
               <div className={`mt-6 flex ${currentStep !== 1 ? 'justify-between' : 'justify-end'}`}>
                 {currentStep !== 1 && (
