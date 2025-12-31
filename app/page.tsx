@@ -38,6 +38,7 @@ export default function Home() {
   const [selectedEmailProvider, setSelectedEmailProvider] = useState<'google' | null>(null);
   const [teamEmails, setTeamEmails] = useState<string[]>(['']);
   const [inviteLink] = useState('https://app.intempt.com/invite?code=522c8ffc');
+  const salesPathDisabled = true;
 
   // Get the currently selected buyer persona details
   const currentBuyerPersona = buyerPersonas.find(p => p.id === selectedBuyerPersona);
@@ -47,9 +48,12 @@ export default function Home() {
 
   // Form validation for each step
   const isStep1Valid = fullName.trim() !== '' && email.trim() !== '' && agreeToTerms;
-  const isStep2Valid = companySearch.trim() !== '';
-  const isStep3Valid = workspaceName.trim() !== '' && websiteUrl.trim() !== '' && workspaceSlug.trim() !== '';
-  const isStep4Valid = selectedPath !== null;
+  const isStep2Valid =
+    companySearch.trim() !== '' &&
+    workspaceName.trim() !== '' &&
+    websiteUrl.trim() !== '' &&
+    workspaceSlug.trim() !== '';
+  const isStep3Valid = selectedPath !== null;
   const isStep5Valid = selectedIntegrations.length > 0;
   const isStep6Valid = true; // Optional step - users can skip or connect later
   const isSalesStep5Valid = selectedSellerPersona !== null && selectedCommunicationStyle !== null;
@@ -141,26 +145,9 @@ export default function Home() {
     api: { name: 'API', type: 'Source', description: 'Connect any data source using our REST API', logo: '' }
   };
 
-  // Dynamic steps based on selected path
-  const getStepMessages = () => {
-    const baseMessages = [
-      'Create your account to get started!',
-      'Set up your organization',
-      'Customize your workspace!',
-      'Choose your growth path!'
-    ];
-    
-    if (selectedPath === 'marketer') {
-      return [...baseMessages, 'Connect your tools!', 'Set up your integrations!'];
-    } else if (selectedPath === 'sales') {
-      return [...baseMessages, 'Define your seller persona!', 'Define your target audience!', 'Tell us about your brand!', 'Describe your offerings!', 'Define your competition!', 'Choose your buyer persona!', 'Your agent is ready!', 'Connect your email!', 'Setup complete! 🎉'];
-    }
-    
-    return baseMessages;
-  };
 
   const getStepValidations = () => {
-    const baseValidations = [isStep1Valid, isStep2Valid, isStep3Valid, isStep4Valid];
+    const baseValidations = [isStep1Valid, isStep2Valid, isStep3Valid];
     
     if (selectedPath === 'marketer') {
       return [...baseValidations, isStep5Valid, isStep6Valid];
@@ -172,10 +159,9 @@ export default function Home() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-white">
+    <div className="min-h-screen bg-white">
       <Stepper
         stepCircleContainerClassName="bg-white"
-        stepToastMessages={getStepMessages()}
         stepValidations={getStepValidations()}
         onFinalStepCompleted={() => {
           console.log('Onboarding completed!');
@@ -185,7 +171,11 @@ export default function Home() {
           <div className="flex flex-col space-y-6">
             {/* Header */}
             <div className="text-center space-y-2">
-              <h1 className="text-3xl font-bold text-black">Intempt</h1>
+              <img
+                src="/logo-name.svg"
+                alt="Intempt"
+                className="mx-auto h-10 w-auto"
+              />
               <h2 className="text-xl font-semibold text-gray-900">Create your account</h2>
               <p className="text-sm text-gray-600">Get started in seconds</p>
             </div>
@@ -307,202 +297,28 @@ export default function Home() {
         </div>
           </div>
         </Step>
+
         <Step>
-          <div className="flex flex-col space-y-6">
-            {/* Header */}
-            <div className="text-center space-y-2">
-              <h2 className="text-2xl font-semibold text-gray-900">Create your organization</h2>
-              <p className="text-sm text-gray-600">Search your company to auto-fill organization details.</p>
-            </div>
-
-            {/* Company Search */}
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="companySearch" className="block text-sm font-medium text-gray-700 mb-1">
-                  Find your company
-                </label>
-                <input
-                  id="companySearch"
-                  type="text"
-                  value={companySearch}
-                  onChange={(e) => setCompanySearch(e.target.value)}
-                  placeholder="Search company name..."
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-sm focus:outline-none focus:border-transparent text-gray-900 placeholder-gray-400"
-                  style={{ 
-                    transition: 'all 0.2s',
-                  }}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = '#0080FF';
-                    e.target.style.boxShadow = '0 0 0 2px rgba(0, 128, 255, 0.1)';
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = '#D1D5DB';
-                    e.target.style.boxShadow = 'none';
-                  }}
-                />
+          <div className="flex flex-col space-y-10">
+            {/* Organization creation */}
+            <div className="flex flex-col space-y-6">
+              <div className="text-center space-y-2">
+                <h2 className="text-2xl font-semibold text-gray-900">Create your organization</h2>
+                <p className="text-sm text-gray-600">Search your company to auto-fill organization details.</p>
               </div>
 
-              {/* Create Organization Button */}
-              <button 
-                className="w-full px-4 py-2.5 rounded-sm font-medium transition-colors"
-                style={{
-                  backgroundColor: companySearch.trim() ? '#0080FF' : '#F3F4F6',
-                  color: companySearch.trim() ? '#FFFFFF' : '#9CA3AF',
-                  cursor: companySearch.trim() ? 'pointer' : 'not-allowed',
-                  border: companySearch.trim() ? 'none' : '1px solid #E5E7EB'
-                }}
-                disabled={!companySearch.trim()}
-                onMouseEnter={(e) => {
-                  if (companySearch.trim()) {
-                    e.currentTarget.style.backgroundColor = '#0066CC';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (companySearch.trim()) {
-                    e.currentTarget.style.backgroundColor = '#0080FF';
-                  }
-                }}
-              >
-                Create organization
-              </button>
-            </div>
-          </div>
-        </Step>
-        <Step>
-          <div className="flex flex-col space-y-6">
-            {/* Header */}
-            <div className="text-center space-y-2">
-              <h2 className="text-2xl font-semibold text-gray-900">Review and customize your workspace details.</h2>
-            </div>
-
-            {/* Form Fields */}
-            <div className="space-y-5">
-              {/* Workspace Name */}
-              <div>
-                <label htmlFor="workspaceName" className="block text-sm font-medium text-gray-900 mb-1">
-                  Workspace name
-                </label>
-                <input
-                  id="workspaceName"
-                  type="text"
-                  value={workspaceName}
-                  onChange={(e) => setWorkspaceName(e.target.value)}
-                  placeholder="Intempt Technologies"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-sm focus:outline-none focus:border-transparent text-gray-900 placeholder-gray-400"
-                  style={{ 
-                    transition: 'all 0.2s',
-                  }}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = '#0080FF';
-                    e.target.style.boxShadow = '0 0 0 2px rgba(0, 128, 255, 0.1)';
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = '#D1D5DB';
-                    e.target.style.boxShadow = 'none';
-                  }}
-                />
-              </div>
-
-              {/* Website URL */}
-              <div>
-                <label htmlFor="websiteUrl" className="block text-sm font-medium text-gray-900 mb-1">
-                  Website URL
-                </label>
-                <input
-                  id="websiteUrl"
-                  type="text"
-                  value={websiteUrl}
-                  onChange={(e) => setWebsiteUrl(e.target.value)}
-                  placeholder="yourcompany.com"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-sm focus:outline-none focus:border-transparent text-gray-900 placeholder-gray-400"
-                  style={{ 
-                    transition: 'all 0.2s',
-                  }}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = '#0080FF';
-                    e.target.style.boxShadow = '0 0 0 2px rgba(0, 128, 255, 0.1)';
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = '#D1D5DB';
-                    e.target.style.boxShadow = 'none';
-                  }}
-                />
-                <p className="text-xs text-gray-500 mt-1">We'll analyze your website to pre-fill your brand information</p>
-              </div>
-
-              {/* Workspace Slug */}
-              <div>
-                <label htmlFor="workspaceSlug" className="block text-sm font-medium text-gray-900 mb-1">
-                  Workspace slug
-                </label>
-                <div className="flex items-center border border-gray-300 rounded-sm overflow-hidden"
-                  style={{ 
-                    transition: 'all 0.2s',
-                  }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = '#0080FF';
-                    e.currentTarget.style.boxShadow = '0 0 0 2px rgba(0, 128, 255, 0.1)';
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = '#D1D5DB';
-                    e.currentTarget.style.boxShadow = 'none';
-                  }}
-                >
-                  <span className="px-4 py-2.5 bg-gray-50 text-gray-500 text-sm border-r border-gray-300">
-                    app.intempt.com/
-                  </span>
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="companySearch" className="block text-sm font-medium text-gray-700 mb-1">
+                    Find your company
+                  </label>
                   <input
-                    id="workspaceSlug"
+                    id="companySearch"
                     type="text"
-                    value={workspaceSlug}
-                    onChange={(e) => setWorkspaceSlug(e.target.value)}
-                    placeholder="intempt"
-                    className="flex-1 px-4 py-2.5 focus:outline-none text-gray-900 placeholder-gray-400 border-none"
-                  />
-                </div>
-                <p className="text-xs text-gray-500 mt-1">You can change this later in your workspace settings.</p>
-              </div>
-
-              {/* Workspace Logo */}
-              <div>
-                <label className="block text-sm font-medium text-gray-900 mb-1">
-                  Workspace logo
-                </label>
-                <div className="flex items-center justify-between p-4 border border-gray-300 rounded-sm">
-                  <div>
-                    <p className="text-sm text-gray-700">Upload image</p>
-                    <p className="text-xs text-gray-500">Recommended size: 160×160px</p>
-                  </div>
-                  <button 
-                    className="px-4 py-2 text-white text-sm font-medium rounded-sm transition-colors"
-                    style={{ backgroundColor: '#0080FF' }}
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#0066CC'}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#0080FF'}
-                  >
-                    Choose file
-                  </button>
-                </div>
-              </div>
-
-              {/* Primary Contact Number */}
-              <div>
-                <label htmlFor="contactNumber" className="block text-sm font-medium text-gray-900 mb-1">
-                  Primary contact number (optional)
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value="+1"
-                    readOnly
-                    className="w-16 px-3 py-2.5 border border-gray-300 rounded-sm bg-gray-50 text-gray-700 text-center"
-                  />
-                  <input
-                    id="contactNumber"
-                    type="tel"
-                    value={contactNumber}
-                    onChange={(e) => setContactNumber(e.target.value)}
-                    placeholder="(555) 987-6543"
-                    className="flex-1 px-4 py-2.5 border border-gray-300 rounded-sm focus:outline-none focus:border-transparent text-gray-900 placeholder-gray-400"
+                    value={companySearch}
+                    onChange={(e) => setCompanySearch(e.target.value)}
+                    placeholder="Search company name..."
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-sm focus:outline-none focus:border-transparent text-gray-900 placeholder-gray-400"
                     style={{ 
                       transition: 'all 0.2s',
                     }}
@@ -516,7 +332,175 @@ export default function Home() {
                     }}
                   />
                 </div>
-                <p className="text-xs text-gray-500 mt-1">For account recovery and notifications</p>
+
+                <button 
+                  className="w-full px-4 py-2.5 rounded-sm font-medium transition-colors"
+                  style={{
+                    backgroundColor: companySearch.trim() ? '#0080FF' : '#F3F4F6',
+                    color: companySearch.trim() ? '#FFFFFF' : '#9CA3AF',
+                    cursor: companySearch.trim() ? 'pointer' : 'not-allowed',
+                    border: companySearch.trim() ? 'none' : '1px solid #E5E7EB'
+                  }}
+                  disabled={!companySearch.trim()}
+                  onMouseEnter={(e) => {
+                    if (companySearch.trim()) {
+                      e.currentTarget.style.backgroundColor = '#0066CC';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (companySearch.trim()) {
+                      e.currentTarget.style.backgroundColor = '#0080FF';
+                    }
+                  }}
+                >
+                  Search
+                </button>
+              </div>
+            </div>
+
+            {/* Workspace details */}
+            <div className="flex flex-col space-y-6">
+              <div className="text-center space-y-2">
+                <h2 className="text-2xl font-semibold text-gray-900">Review and customize your workspace details.</h2>
+              </div>
+
+              <div className="space-y-5">
+                <div>
+                  <label htmlFor="workspaceName" className="block text-sm font-medium text-gray-900 mb-1">
+                    Workspace name
+                  </label>
+                  <input
+                    id="workspaceName"
+                    type="text"
+                    value={workspaceName}
+                    onChange={(e) => setWorkspaceName(e.target.value)}
+                    placeholder="Intempt Technologies"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-sm focus:outline-none focus:border-transparent text-gray-900 placeholder-gray-400"
+                    style={{ 
+                      transition: 'all 0.2s',
+                    }}
+                    onFocus={(e) => {
+                      e.target.style.borderColor = '#0080FF';
+                      e.target.style.boxShadow = '0 0 0 2px rgba(0, 128, 255, 0.1)';
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.borderColor = '#D1D5DB';
+                      e.target.style.boxShadow = 'none';
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="websiteUrl" className="block text-sm font-medium text-gray-900 mb-1">
+                    Website URL
+                  </label>
+                  <input
+                    id="websiteUrl"
+                    type="text"
+                    value={websiteUrl}
+                    onChange={(e) => setWebsiteUrl(e.target.value)}
+                    placeholder="yourcompany.com"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-sm focus:outline-none focus:border-transparent text-gray-900 placeholder-gray-400"
+                    style={{ 
+                      transition: 'all 0.2s',
+                    }}
+                    onFocus={(e) => {
+                      e.target.style.borderColor = '#0080FF';
+                      e.target.style.boxShadow = '0 0 0 2px rgba(0, 128, 255, 0.1)';
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.borderColor = '#D1D5DB';
+                      e.target.style.boxShadow = 'none';
+                    }}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">We'll analyze your website to pre-fill your brand information</p>
+                </div>
+
+                <div>
+                  <label htmlFor="workspaceSlug" className="block text-sm font-medium text-gray-900 mb-1">
+                    Workspace slug
+                  </label>
+                  <div className="flex items-center border border-gray-300 rounded-sm overflow-hidden"
+                    style={{ 
+                      transition: 'all 0.2s',
+                    }}
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = '#0080FF';
+                      e.currentTarget.style.boxShadow = '0 0 0 2px rgba(0, 128, 255, 0.1)';
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.borderColor = '#D1D5DB';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
+                  >
+                    <span className="px-4 py-2.5 bg-gray-50 text-gray-500 text-sm border-r border-gray-300">
+                      app.intempt.com/
+                    </span>
+                    <input
+                      id="workspaceSlug"
+                      type="text"
+                      value={workspaceSlug}
+                      onChange={(e) => setWorkspaceSlug(e.target.value)}
+                      placeholder="intempt"
+                      className="flex-1 px-4 py-2.5 focus:outline-none text-gray-900 placeholder-gray-400 border-none"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">You can change this later in your workspace settings.</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-1">
+                    Workspace logo
+                  </label>
+                  <div className="flex items-center justify-between p-4 border border-gray-300 rounded-sm">
+                    <div>
+                      <p className="text-sm text-gray-700">Upload image</p>
+                      <p className="text-xs text-gray-500">Recommended size: 160A-160px</p>
+                    </div>
+                    <button 
+                      className="px-4 py-2 text-white text-sm font-medium rounded-sm transition-colors"
+                      style={{ backgroundColor: '#0080FF' }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#0066CC'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#0080FF'}
+                    >
+                      Choose file
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="contactNumber" className="block text-sm font-medium text-gray-900 mb-1">
+                    Primary contact number (optional)
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value="+1"
+                      readOnly
+                      className="w-16 px-3 py-2.5 border border-gray-300 rounded-sm bg-gray-50 text-gray-700 text-center"
+                    />
+                    <input
+                      id="contactNumber"
+                      type="tel"
+                      value={contactNumber}
+                      onChange={(e) => setContactNumber(e.target.value)}
+                      placeholder="(555) 987-6543"
+                      className="flex-1 px-4 py-2.5 border border-gray-300 rounded-sm focus:outline-none focus:border-transparent text-gray-900 placeholder-gray-400"
+                      style={{ 
+                        transition: 'all 0.2s',
+                      }}
+                      onFocus={(e) => {
+                        e.target.style.borderColor = '#0080FF';
+                        e.target.style.boxShadow = '0 0 0 2px rgba(0, 128, 255, 0.1)';
+                      }}
+                      onBlur={(e) => {
+                        e.target.style.borderColor = '#D1D5DB';
+                        e.target.style.boxShadow = 'none';
+                      }}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">For account recovery and notifications</p>
+                </div>
               </div>
             </div>
           </div>
@@ -543,10 +527,6 @@ export default function Home() {
                 }}
               >
                 <div className="flex items-center gap-2 mb-3">
-                  <div 
-                    className="w-2 h-2 rounded-full" 
-                    style={{ backgroundColor: '#0080FF' }}
-                  />
                   <h3 className="text-base font-semibold text-gray-900">Growth OS for Marketers</h3>
                 </div>
                 <ul className="space-y-2 text-sm text-gray-600 flex-1">
@@ -585,20 +565,36 @@ export default function Home() {
 
               {/* Sales Rep Option */}
               <div
-                onClick={() => setSelectedPath('sales')}
-                className="relative border rounded-sm p-5 cursor-pointer transition-all duration-300 flex flex-col"
+                aria-disabled={salesPathDisabled}
+                onClick={() => {
+                  if (!salesPathDisabled) {
+                    setSelectedPath('sales');
+                  }
+                }}
+                className={`relative border rounded-sm p-5 transition-all duration-300 flex flex-col ${
+                  salesPathDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+                }`}
                 style={{
-                  borderColor: selectedPath === 'sales' ? '#0080FF' : '#D1D5DB',
-                  backgroundColor: selectedPath === 'sales' ? 'rgba(0, 128, 255, 0.02)' : 'white',
-                  boxShadow: selectedPath === 'sales' ? '0 0 0 3px rgba(0, 128, 255, 0.1)' : 'none'
+                  pointerEvents: salesPathDisabled ? 'none' : 'auto',
+                  borderColor: salesPathDisabled
+                    ? '#E5E7EB'
+                    : selectedPath === 'sales'
+                      ? '#0080FF'
+                      : '#D1D5DB',
+                  backgroundColor: salesPathDisabled
+                    ? '#F9FAFB'
+                    : selectedPath === 'sales'
+                      ? 'rgba(0, 128, 255, 0.02)'
+                      : 'white',
+                  boxShadow: salesPathDisabled
+                    ? 'none'
+                    : selectedPath === 'sales'
+                      ? '0 0 0 3px rgba(0, 128, 255, 0.1)'
+                      : 'none'
                 }}
               >
                 <div className="flex items-center gap-2 mb-3">
-                  <div 
-                    className="w-2 h-2 rounded-full" 
-                    style={{ backgroundColor: '#0080FF' }}
-                  />
-                  <h3 className="text-base font-semibold text-gray-900">Growth OS for Sales Reps</h3>
+                  <h3 className="text-base font-semibold text-gray-500">Growth OS for Sales Reps</h3>
                 </div>
                 <ul className="space-y-2 text-sm text-gray-600 flex-1">
                   <li className="flex items-start gap-2">
@@ -625,12 +621,28 @@ export default function Home() {
                 <button
                   className="w-full mt-4 px-4 py-2 rounded-sm text-sm font-medium transition-all duration-300"
                   style={{
-                    backgroundColor: selectedPath === 'sales' ? '#0080FF' : 'white',
-                    color: selectedPath === 'sales' ? 'white' : '#6B7280',
-                    border: `1px solid ${selectedPath === 'sales' ? '#0080FF' : '#D1D5DB'}`
+                    backgroundColor: salesPathDisabled
+                      ? '#F3F4F6'
+                      : selectedPath === 'sales'
+                        ? '#0080FF'
+                        : 'white',
+                    color: salesPathDisabled
+                      ? '#9CA3AF'
+                      : selectedPath === 'sales'
+                        ? 'white'
+                        : '#6B7280',
+                    border: `1px solid ${
+                      salesPathDisabled
+                        ? '#E5E7EB'
+                        : selectedPath === 'sales'
+                          ? '#0080FF'
+                          : '#D1D5DB'
+                    }`,
+                    cursor: salesPathDisabled ? 'not-allowed' : 'pointer'
                   }}
+                  disabled={salesPathDisabled}
                 >
-                  {selectedPath === 'sales' ? 'Selected' : 'Select'}
+                  {salesPathDisabled ? 'Coming soon' : selectedPath === 'sales' ? 'Selected' : 'Select'}
                 </button>
               </div>
             </div>

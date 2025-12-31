@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, Children, useRef, useLayoutEffect, useEffect, HTMLAttributes, ReactNode } from 'react';
+import React, { useState, Children, useRef, useLayoutEffect, HTMLAttributes, ReactNode } from 'react';
 import { motion, AnimatePresence, Variants } from 'motion/react';
 
 interface StepperProps extends HTMLAttributes<HTMLDivElement> {
@@ -17,7 +17,6 @@ interface StepperProps extends HTMLAttributes<HTMLDivElement> {
   backButtonText?: string;
   nextButtonText?: string;
   disableStepIndicators?: boolean;
-  stepToastMessages?: string[];
   stepValidations?: boolean[];
   renderStepIndicator?: (props: {
     step: number;
@@ -40,29 +39,16 @@ export default function Stepper({
   backButtonText = 'Back',
   nextButtonText = 'Continue',
   disableStepIndicators = false,
-  stepToastMessages = [],
   stepValidations = [],
   renderStepIndicator,
   ...rest
 }: StepperProps) {
   const [currentStep, setCurrentStep] = useState<number>(initialStep);
   const [direction, setDirection] = useState<number>(0);
-  const [showToast, setShowToast] = useState<boolean>(false);
   const stepsArray = Children.toArray(children);
   const totalSteps = stepsArray.length;
   const isCompleted = currentStep > totalSteps;
   const isLastStep = currentStep === totalSteps;
-
-  // Show toast notification when step changes
-  useEffect(() => {
-    if (currentStep <= totalSteps) {
-      setShowToast(true);
-      const timer = setTimeout(() => {
-        setShowToast(false);
-      }, 2500);
-      return () => clearTimeout(timer);
-    }
-  }, [currentStep, totalSteps]);
 
   const updateStep = (newStep: number) => {
     setCurrentStep(newStep);
@@ -95,58 +81,64 @@ export default function Stepper({
   return (
     <>
       <div
-        className="flex min-h-full flex-1 flex-col items-center justify-center p-4"
+        className="flex w-full h-screen flex-col items-center bg-white overflow-hidden"
         {...rest}
       >
-        <div
-          className={`mx-auto w-full max-w-5xl rounded-4xl border border-gray-200 ${stepCircleContainerClassName}`}
-        >
-          <div className={`${stepContainerClassName} flex w-full items-center p-8`}>
-            {stepsArray.map((_, index) => {
-              const stepNumber = index + 1;
-              const isNotLastStep = index < totalSteps - 1;
-              return (
-                <React.Fragment key={stepNumber}>
-                  {renderStepIndicator ? (
-                    renderStepIndicator({
-                      step: stepNumber,
-                      currentStep,
-                      onStepClick: clicked => {
-                        setDirection(clicked > currentStep ? 1 : -1);
-                        updateStep(clicked);
-                      }
-                    })
-                  ) : (
-                    <StepIndicator
-                      step={stepNumber}
-                      disableStepIndicators={disableStepIndicators}
-                      currentStep={currentStep}
-                      onClickStep={clicked => {
-                        setDirection(clicked > currentStep ? 1 : -1);
-                        updateStep(clicked);
-                      }}
-                    />
-                  )}
-                  {isNotLastStep && <StepConnector isComplete={currentStep > stepNumber} />}
-                </React.Fragment>
-              );
-            })}
+        <div className="mx-auto flex h-full w-full max-w-3xl flex-col overflow-hidden">
+          <div
+            className={`sticky top-0 z-20 w-full bg-white/95 backdrop-blur-sm ${stepCircleContainerClassName}`}
+          >
+            <div className={`${stepContainerClassName} flex w-full items-center px-8 py-6`}>
+              {stepsArray.map((_, index) => {
+                const stepNumber = index + 1;
+                const isNotLastStep = index < totalSteps - 1;
+                return (
+                  <React.Fragment key={stepNumber}>
+                    {renderStepIndicator ? (
+                      renderStepIndicator({
+                        step: stepNumber,
+                        currentStep,
+                        onStepClick: clicked => {
+                          setDirection(clicked > currentStep ? 1 : -1);
+                          updateStep(clicked);
+                        }
+                      })
+                    ) : (
+                      <StepIndicator
+                        step={stepNumber}
+                        disableStepIndicators={disableStepIndicators}
+                        currentStep={currentStep}
+                        onClickStep={clicked => {
+                          setDirection(clicked > currentStep ? 1 : -1);
+                          updateStep(clicked);
+                        }}
+                      />
+                    )}
+                    {isNotLastStep && <StepConnector isComplete={currentStep > stepNumber} />}
+                  </React.Fragment>
+                );
+              })}
+            </div>
           </div>
 
-        <div className="overflow-y-auto" style={{ maxHeight: '70vh' }}>
-          <StepContentWrapper
-            isCompleted={isCompleted}
-            currentStep={currentStep}
-            direction={direction}
-            className={`space-y-2 px-8 ${contentClassName}`}
-          >
-            {stepsArray[currentStep - 1]}
-          </StepContentWrapper>
-        </div>
+          <div className="stepper-scroll flex-1 overflow-y-auto px-2">
+            <StepContentWrapper
+              isCompleted={isCompleted}
+              currentStep={currentStep}
+              direction={direction}
+              className={`space-y-2 px-8 w-full max-w-3xl mx-auto ${contentClassName}`}
+            >
+              <div className="w-full">
+                {stepsArray[currentStep - 1]}
+              </div>
+            </StepContentWrapper>
+          </div>
 
           {!isCompleted && (
-            <div className={`px-8 pb-8 ${footerClassName}`}>
-              <div className={`mt-10 flex ${currentStep !== 1 ? 'justify-between' : 'justify-end'}`}>
+            <div
+              className={`sticky bottom-0 w-full bg-white/95 px-8 pb-8 pt-4 backdrop-blur-sm ${footerClassName}`}
+            >
+              <div className={`mt-6 flex ${currentStep !== 1 ? 'justify-between' : 'justify-end'}`}>
                 {currentStep !== 1 && (
                   <button
                     onClick={handleBack}
@@ -160,80 +152,55 @@ export default function Stepper({
                     {backButtonText}
                   </button>
                 )}
-              <button
-                onClick={isLastStep ? handleComplete : handleNext}
-                disabled={stepValidations.length > 0 && !stepValidations[currentStep - 1]}
-                className="duration-350 flex items-center justify-center rounded-sm py-1.5 px-3.5 font-medium tracking-tight transition"
-                style={{ 
-                  backgroundColor: (stepValidations.length > 0 && !stepValidations[currentStep - 1]) ? '#E5E5E5' : '#0080FF',
-                  color: (stepValidations.length > 0 && !stepValidations[currentStep - 1]) ? '#999999' : '#FFFFFF',
-                  cursor: (stepValidations.length > 0 && !stepValidations[currentStep - 1]) ? 'not-allowed' : 'pointer'
-                }}
-                onMouseEnter={(e) => {
-                  if (stepValidations.length === 0 || stepValidations[currentStep - 1]) {
-                    e.currentTarget.style.backgroundColor = '#0066CC';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (stepValidations.length === 0 || stepValidations[currentStep - 1]) {
-                    e.currentTarget.style.backgroundColor = '#0080FF';
-                  }
-                }}
-                {...nextButtonProps}
-              >
-                {isLastStep ? 'Complete' : nextButtonText}
-              </button>
+                <button
+                  onClick={isLastStep ? handleComplete : handleNext}
+                  disabled={stepValidations.length > 0 && !stepValidations[currentStep - 1]}
+                  className="duration-350 flex items-center justify-center rounded-sm py-2 px-4 font-medium tracking-tight transition"
+                  style={{ 
+                    backgroundColor: (stepValidations.length > 0 && !stepValidations[currentStep - 1]) ? '#E5E5E5' : '#0080FF',
+                    color: (stepValidations.length > 0 && !stepValidations[currentStep - 1]) ? '#999999' : '#FFFFFF',
+                    cursor: (stepValidations.length > 0 && !stepValidations[currentStep - 1]) ? 'not-allowed' : 'pointer'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (stepValidations.length === 0 || stepValidations[currentStep - 1]) {
+                      e.currentTarget.style.backgroundColor = '#0066CC';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (stepValidations.length === 0 || stepValidations[currentStep - 1]) {
+                      e.currentTarget.style.backgroundColor = '#0080FF';
+                    }
+                  }}
+                  {...nextButtonProps}
+                >
+                  {isLastStep ? 'Complete' : nextButtonText}
+                </button>
               </div>
             </div>
           )}
         </div>
       </div>
 
-      {/* Toast Notification */}
-      <AnimatePresence>
-        {showToast && !isCompleted && (
-          <motion.div
-            key={`toast-${currentStep}`}
-            initial={{ opacity: 0, y: 50, scale: 0.3 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.5, transition: { duration: 0.2 } }}
-            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-            className="fixed bottom-6 right-6 z-50"
-          >
-            <div className="flex items-center gap-3 rounded-sm bg-white px-4 py-3 border border-gray-200">
-              <div 
-                className="flex h-8 w-8 items-center justify-center rounded-full"
-                style={{ backgroundColor: '#0080FF' }}
-              >
-                <svg
-                  className="h-5 w-5 text-white"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M5 13l4 4L19 7"
-                  />
-                </svg>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-sm font-semibold text-gray-900">
-                  Step {currentStep} of {totalSteps}
-                </span>
-                <span className="text-xs text-gray-600">
-                  {stepToastMessages[currentStep - 1] || 
-                    (currentStep === 1 ? 'Welcome to onboarding!' :
-                     currentStep === 2 ? 'Tell us about yourself' :
-                     currentStep === 3 ? 'Almost done!' : 'Keep going!')}
-                </span>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <style jsx global>{`
+        html, body {
+          overflow: hidden;
+        }
+        .stepper-scroll {
+          scrollbar-width: thin;
+          scrollbar-color: #d1d5db transparent;
+        }
+        .stepper-scroll::-webkit-scrollbar {
+          width: 8px;
+        }
+        .stepper-scroll::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .stepper-scroll::-webkit-scrollbar-thumb {
+          background-color: #d1d5db;
+          border-radius: 9999px;
+          border: 2px solid transparent;
+        }
+      `}</style>
     </>
   );
 }
