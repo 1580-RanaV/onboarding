@@ -23,6 +23,10 @@ interface StepperProps extends HTMLAttributes<HTMLDivElement> {
     currentStep: number;
     onStepClick: (clicked: number) => void;
   }) => ReactNode;
+  onStepContinue?: (step: number) => Promise<boolean> | boolean;
+  onStepBack?: (step: number) => Promise<boolean> | boolean;
+  canNavigateToStep?: (step: number) => boolean;
+  isLoading?: boolean;
 }
 
 export default function Stepper({
@@ -41,6 +45,10 @@ export default function Stepper({
   disableStepIndicators = false,
   stepValidations = [],
   renderStepIndicator,
+  onStepContinue,
+  onStepBack,
+  canNavigateToStep,
+  isLoading = false,
   ...rest
 }: StepperProps) {
   const [currentStep, setCurrentStep] = useState<number>(initialStep);
@@ -49,6 +57,11 @@ export default function Stepper({
   const totalSteps = stepsArray.length;
   const isCompleted = currentStep > totalSteps;
   const isLastStep = currentStep === totalSteps;
+
+  // Sync internal step with external initialStep prop
+  React.useEffect(() => {
+    setCurrentStep(initialStep);
+  }, [initialStep]);
 
   const updateStep = (newStep: number) => {
     setCurrentStep(newStep);
@@ -59,21 +72,41 @@ export default function Stepper({
     }
   };
 
-  const handleBack = () => {
-    if (currentStep > 1) {
+  const handleBack = async () => {
+    if (currentStep > 1 && !isLoading) {
+      // Call onStepBack if provided
+      if (onStepBack) {
+        const canGoBack = await onStepBack(currentStep);
+        if (!canGoBack) {
+          return; // Don't proceed if callback returns false
+        }
+      }
       setDirection(-1);
       updateStep(currentStep - 1);
     }
   };
 
-  const handleNext = () => {
-    if (!isLastStep) {
+  const handleNext = async () => {
+    if (!isLastStep && !isLoading) {
+      // Call onStepContinue if provided
+      if (onStepContinue) {
+        const canContinue = await onStepContinue(currentStep);
+        if (!canContinue) {
+          return; // Don't proceed if validation fails
+        }
+      }
       setDirection(1);
       updateStep(currentStep + 1);
     }
   };
 
-  const handleComplete = () => {
+  const handleComplete = async () => {
+    if (onStepContinue) {
+      const canContinue = await onStepContinue(currentStep);
+      if (!canContinue) {
+        return;
+      }
+    }
     setDirection(1);
     updateStep(totalSteps + 1);
   };
@@ -81,7 +114,7 @@ export default function Stepper({
   return (
     <>
       <div
-        className="flex w-full h-screen flex-col items-center bg-white overflow-hidden"
+        className="flex w-full h-full flex-col items-center bg-white overflow-hidden"
         {...rest}
       >
         <div className="mx-auto flex h-full w-full max-w-3xl flex-col overflow-hidden">
@@ -99,6 +132,10 @@ export default function Stepper({
                         step: stepNumber,
                         currentStep,
                         onStepClick: clicked => {
+                          // Check if navigation to this step is allowed
+                          if (canNavigateToStep && !canNavigateToStep(clicked)) {
+                            return; // Prevent navigation
+                          }
                           setDirection(clicked > currentStep ? 1 : -1);
                           updateStep(clicked);
                         }
@@ -109,6 +146,10 @@ export default function Stepper({
                         disableStepIndicators={disableStepIndicators}
                         currentStep={currentStep}
                         onClickStep={clicked => {
+                          // Check if navigation to this step is allowed
+                          if (canNavigateToStep && !canNavigateToStep(clicked)) {
+                            return; // Prevent navigation
+                          }
                           setDirection(clicked > currentStep ? 1 : -1);
                           updateStep(clicked);
                         }}
@@ -154,26 +195,26 @@ export default function Stepper({
                 )}
                 <button
                   onClick={isLastStep ? handleComplete : handleNext}
-                  disabled={stepValidations.length > 0 && !stepValidations[currentStep - 1]}
+                  disabled={(stepValidations.length > 0 && !stepValidations[currentStep - 1]) || isLoading}
                   className="duration-350 flex items-center justify-center rounded-sm py-2 px-4 font-medium tracking-tight transition"
                   style={{ 
-                    backgroundColor: (stepValidations.length > 0 && !stepValidations[currentStep - 1]) ? '#E5E5E5' : '#0080FF',
-                    color: (stepValidations.length > 0 && !stepValidations[currentStep - 1]) ? '#999999' : '#FFFFFF',
-                    cursor: (stepValidations.length > 0 && !stepValidations[currentStep - 1]) ? 'not-allowed' : 'pointer'
+                    backgroundColor: (stepValidations.length > 0 && !stepValidations[currentStep - 1]) || isLoading ? '#E5E5E5' : '#0080FF',
+                    color: (stepValidations.length > 0 && !stepValidations[currentStep - 1]) || isLoading ? '#999999' : '#FFFFFF',
+                    cursor: (stepValidations.length > 0 && !stepValidations[currentStep - 1]) || isLoading ? 'not-allowed' : 'pointer'
                   }}
                   onMouseEnter={(e) => {
-                    if (stepValidations.length === 0 || stepValidations[currentStep - 1]) {
+                    if ((stepValidations.length === 0 || stepValidations[currentStep - 1]) && !isLoading) {
                       e.currentTarget.style.backgroundColor = '#0066CC';
                     }
                   }}
                   onMouseLeave={(e) => {
-                    if (stepValidations.length === 0 || stepValidations[currentStep - 1]) {
+                    if ((stepValidations.length === 0 || stepValidations[currentStep - 1]) && !isLoading) {
                       e.currentTarget.style.backgroundColor = '#0080FF';
                     }
                   }}
                   {...nextButtonProps}
                 >
-                  {isLastStep ? 'Complete' : nextButtonText}
+                  {isLoading ? 'Loading...' : (isLastStep ? 'Complete' : nextButtonText)}
                 </button>
               </div>
             </div>

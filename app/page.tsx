@@ -2,9 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { z } from 'zod';
 import Stepper, { Step } from './components/Stepper';
 import { sellerPersonas } from './data/sellerPersonas';
 import { buyerPersonas } from './data/buyerPersonas';
+import { step1Schema, step2Schema } from './lib/validation';
+import Loading from './components/Loading';
+import WorkspaceError from './components/WorkspaceError';
 
 export default function Home() {
   const [fullName, setFullName] = useState('');
@@ -39,6 +43,11 @@ export default function Home() {
   const [teamEmails, setTeamEmails] = useState<string[]>(['']);
   const [inviteLink] = useState('https://app.intempt.com/invite?code=522c8ffc');
   const salesPathDisabled = true;
+  const [isLoading, setIsLoading] = useState(false);
+  const [isOrganizationCreated, setIsOrganizationCreated] = useState(false);
+  const [step2Errors, setStep2Errors] = useState<Record<string, string>>({});
+  const [step1Errors, setStep1Errors] = useState<Record<string, string>>({});
+  const [currentStep, setCurrentStep] = useState(1);
 
   // Get the currently selected buyer persona details
   const currentBuyerPersona = buyerPersonas.find(p => p.id === selectedBuyerPersona);
@@ -46,12 +55,69 @@ export default function Home() {
   // Get the currently selected persona details
   const currentPersona = sellerPersonas.find(p => p.id === selectedSellerPersona);
 
+  // Check if organization was already created on mount
+  useEffect(() => {
+    const orgCreated = localStorage.getItem('organizationCreated');
+    if (orgCreated === 'true') {
+      setIsOrganizationCreated(true);
+      // Redirect to step 3 if organization already created
+      setCurrentStep(3);
+    }
+  }, []);
+
+  // Validation functions
+  const validateStep1 = () => {
+    try {
+      step1Schema.parse({
+        fullName,
+        email,
+        agreeToTerms,
+      });
+      setStep1Errors({});
+      return true;
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const errors: Record<string, string> = {};
+        error.issues.forEach((err: z.ZodIssue) => {
+          if (err.path[0]) {
+            errors[err.path[0].toString()] = err.message;
+          }
+        });
+        setStep1Errors(errors);
+      }
+      return false;
+    }
+  };
+
+  const validateStep2 = () => {
+    try {
+      step2Schema.parse({
+        companySearch,
+        workspaceName,
+        websiteUrl,
+        workspaceSlug,
+      });
+      setStep2Errors({});
+      return true;
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const errors: Record<string, string> = {};
+        error.issues.forEach((err: z.ZodIssue) => {
+          if (err.path[0]) {
+            errors[err.path[0].toString()] = err.message;
+          }
+        });
+        setStep2Errors(errors);
+      }
+      return false;
+    }
+  };
+
   // Form validation for each step
   const isStep1Valid = fullName.trim() !== '' && email.trim() !== '' && agreeToTerms;
   const isStep2Valid =
     companySearch.trim() !== '' &&
     workspaceName.trim() !== '' &&
-    websiteUrl.trim() !== '' &&
     workspaceSlug.trim() !== '';
   const isStep3Valid = selectedPath !== null;
   const isStep5Valid = selectedIntegrations.length > 0;
@@ -81,11 +147,41 @@ export default function Home() {
   };
 
   const toggleIntegration = (tool: string) => {
+    // Don't allow toggling if already connected
+    if (connectedIntegrations.includes(tool)) {
+      return;
+    }
     setSelectedIntegrations(prev => 
       prev.includes(tool) 
         ? prev.filter(t => t !== tool)
         : [...prev, tool]
     );
+  };
+
+  // Helper function to get integration card styles
+  const getIntegrationCardStyle = (tool: string) => {
+    const isConnected = connectedIntegrations.includes(tool);
+    const isSelected = selectedIntegrations.includes(tool);
+    
+    return {
+      borderColor: isConnected 
+        ? '#93C5FD' // Light blue for connected
+        : isSelected 
+        ? '#0080FF' 
+        : '#D1D5DB',
+      backgroundColor: isConnected
+        ? 'rgba(147, 197, 253, 0.2)' // Light blue background
+        : isSelected 
+        ? 'rgba(0, 128, 255, 0.05)' 
+        : 'white',
+      boxShadow: isConnected
+        ? '0 0 0 2px rgba(147, 197, 253, 0.3)'
+        : isSelected 
+        ? '0 0 0 2px rgba(0, 128, 255, 0.2)' 
+        : 'none',
+      cursor: isConnected ? 'not-allowed' : 'pointer',
+      opacity: isConnected ? 0.7 : 1,
+    };
   };
 
   const handleConnectClick = (tool: string) => {
@@ -120,6 +216,14 @@ export default function Home() {
       setCurrentConnectingTool(null);
       setApiKey('');
     }
+  };
+
+  // Handle removing/disconnecting an integration
+  const handleRemoveIntegration = (toolKey: string) => {
+    // Remove from selected integrations
+    setSelectedIntegrations(prev => prev.filter(t => t !== toolKey));
+    // Remove from connected integrations if it was connected
+    setConnectedIntegrations(prev => prev.filter(t => t !== toolKey));
   };
 
   const handleModalClose = () => {
@@ -158,15 +262,92 @@ export default function Home() {
     return baseValidations;
   };
 
+  // Handle step continuation with validation and loading
+  const handleStepContinue = async (step: number): Promise<boolean> => {
+    setIsLoading(true);
+    
+    try {
+      // Validate step 1 before proceeding
+      if (step === 1) {
+        const isValid = validateStep1();
+        if (!isValid) {
+          setIsLoading(false);
+          return false;
+        }
+      }
+      
+      // Validate step 2 before proceeding
+      if (step === 2) {
+        const isValid = validateStep2();
+        if (!isValid) {
+          setIsLoading(false);
+          return false;
+        }
+        // Mark organization as created
+        setIsOrganizationCreated(true);
+        localStorage.setItem('organizationCreated', 'true');
+      }
+      
+      // Simulate API call or processing
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      return true;
+    } catch (error) {
+      console.error('Error:', error);
+      setIsLoading(false);
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle step back navigation - prevent going back to step 1 or 2 if organization is created
+  const handleStepBack = async (step: number): Promise<boolean> => {
+    // If trying to go back to step 1 or 2 when organization is created
+    if (isOrganizationCreated && (step === 2 || step === 3)) {
+      // If current step is 3, trying to go to step 2
+      // If current step is 2, trying to go to step 1
+      setToastMessage('The workspace has already been created. You cannot go back to modify it.');
+      // Auto-dismiss toast after 4 seconds
+      setTimeout(() => {
+        setToastMessage(null);
+      }, 4000);
+      return false; // Prevent navigation
+    }
+    return true; // Allow navigation
+  };
+
+  // Check if user can navigate to a specific step
+  const canNavigateToStep = (step: number): boolean => {
+    // Prevent navigating to step 1 or 2 if organization is already created
+    if (isOrganizationCreated && (step === 1 || step === 2)) {
+      setToastMessage('The workspace has already been created. You cannot go back to modify it.');
+      // Auto-dismiss toast after 4 seconds
+      setTimeout(() => {
+        setToastMessage(null);
+      }, 4000);
+      return false;
+    }
+    return true;
+  };
+
   return (
-    <div className="min-h-screen bg-white">
-      <Stepper
-        stepCircleContainerClassName="bg-white"
-        stepValidations={getStepValidations()}
-        onFinalStepCompleted={() => {
-          console.log('Onboarding completed!');
-        }}
-      >
+    <div className="min-h-screen bg-white flex flex-col md:flex-row md:overflow-hidden md:h-screen">
+      {/* Right Side - Stepper (First on mobile, second on desktop) */}
+      <div className="w-full md:w-1/2 bg-white md:h-screen order-1 md:order-2 shrink-0">
+        <Stepper
+          stepCircleContainerClassName="bg-white"
+          stepValidations={getStepValidations()}
+          onFinalStepCompleted={() => {
+            console.log('Onboarding completed!');
+          }}
+          onStepContinue={handleStepContinue}
+          onStepBack={handleStepBack}
+          canNavigateToStep={canNavigateToStep}
+          isLoading={isLoading}
+          initialStep={currentStep}
+          onStepChange={(step) => setCurrentStep(step)}
+        >
         <Step>
           <div className="flex flex-col space-y-6">
             {/* Header */}
@@ -221,21 +402,31 @@ export default function Home() {
                   id="fullName"
                   type="text"
                   value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
+                  onChange={(e) => {
+                    setFullName(e.target.value);
+                    if (step1Errors.fullName) {
+                      setStep1Errors(prev => ({ ...prev, fullName: '' }));
+                    }
+                  }}
                   placeholder="John Doe"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-sm focus:outline-none focus:border-transparent text-gray-900 placeholder-gray-400"
+                  className="w-full px-4 border border-gray-300 rounded-sm focus:outline-none focus:border-transparent text-gray-900 placeholder-gray-400"
                   style={{ 
+                    height: '40px',
                     transition: 'all 0.2s',
+                    borderColor: step1Errors.fullName ? '#EF4444' : undefined,
                   }}
                   onFocus={(e) => {
                     e.target.style.borderColor = '#0080FF';
                     e.target.style.boxShadow = '0 0 0 2px rgba(0, 128, 255, 0.1)';
                   }}
                   onBlur={(e) => {
-                    e.target.style.borderColor = '#D1D5DB';
+                    e.target.style.borderColor = step1Errors.fullName ? '#EF4444' : '#D1D5DB';
                     e.target.style.boxShadow = 'none';
                   }}
                 />
+                {step1Errors.fullName && (
+                  <p className="text-xs text-red-600 mt-1">{step1Errors.fullName}</p>
+                )}
               </div>
 
               <div>
@@ -246,21 +437,31 @@ export default function Home() {
                   id="email"
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (step1Errors.email) {
+                      setStep1Errors(prev => ({ ...prev, email: '' }));
+                    }
+                  }}
                   placeholder="you@example.com"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-sm focus:outline-none focus:border-transparent text-gray-900 placeholder-gray-400"
+                  className="w-full px-4 border border-gray-300 rounded-sm focus:outline-none focus:border-transparent text-gray-900 placeholder-gray-400"
                   style={{ 
+                    height: '40px',
                     transition: 'all 0.2s',
+                    borderColor: step1Errors.email ? '#EF4444' : undefined,
                   }}
                   onFocus={(e) => {
                     e.target.style.borderColor = '#0080FF';
                     e.target.style.boxShadow = '0 0 0 2px rgba(0, 128, 255, 0.1)';
                   }}
                   onBlur={(e) => {
-                    e.target.style.borderColor = '#D1D5DB';
+                    e.target.style.borderColor = step1Errors.email ? '#EF4444' : '#D1D5DB';
                     e.target.style.boxShadow = 'none';
                   }}
                 />
+                {step1Errors.email && (
+                  <p className="text-xs text-red-600 mt-1">{step1Errors.email}</p>
+                )}
               </div>
         </div>
 
@@ -300,6 +501,11 @@ export default function Home() {
 
         <Step>
           <div className="flex flex-col space-y-10">
+            {isOrganizationCreated && (
+              <div className="mb-4">
+                <WorkspaceError />
+              </div>
+            )}
             {/* Organization creation */}
             <div className="flex flex-col space-y-6">
               <div className="text-center space-y-2">
@@ -310,27 +516,37 @@ export default function Home() {
               <div className="space-y-4">
                 <div>
                   <label htmlFor="companySearch" className="block text-sm font-medium text-gray-700 mb-1">
-                    Find your company
+                    Find your company <span className="text-red-500">*</span>
                   </label>
                   <input
                     id="companySearch"
                     type="text"
                     value={companySearch}
-                    onChange={(e) => setCompanySearch(e.target.value)}
+                    onChange={(e) => {
+                      setCompanySearch(e.target.value);
+                      if (step2Errors.companySearch) {
+                        setStep2Errors(prev => ({ ...prev, companySearch: '' }));
+                      }
+                    }}
                     placeholder="Search company name..."
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-sm focus:outline-none focus:border-transparent text-gray-900 placeholder-gray-400"
+                    className="w-full px-4 border border-gray-300 rounded-sm focus:outline-none focus:border-transparent text-gray-900 placeholder-gray-400"
                     style={{ 
+                      height: '40px',
                       transition: 'all 0.2s',
+                      borderColor: step2Errors.companySearch ? '#EF4444' : undefined,
                     }}
                     onFocus={(e) => {
                       e.target.style.borderColor = '#0080FF';
                       e.target.style.boxShadow = '0 0 0 2px rgba(0, 128, 255, 0.1)';
                     }}
                     onBlur={(e) => {
-                      e.target.style.borderColor = '#D1D5DB';
+                      e.target.style.borderColor = step2Errors.companySearch ? '#EF4444' : '#D1D5DB';
                       e.target.style.boxShadow = 'none';
                     }}
                   />
+                  {step2Errors.companySearch && (
+                    <p className="text-xs text-red-600 mt-1">{step2Errors.companySearch}</p>
+                  )}
                 </div>
 
                 <button 
@@ -367,27 +583,37 @@ export default function Home() {
               <div className="space-y-5">
                 <div>
                   <label htmlFor="workspaceName" className="block text-sm font-medium text-gray-900 mb-1">
-                    Workspace name
+                    Workspace name <span className="text-red-500">*</span>
                   </label>
                   <input
                     id="workspaceName"
                     type="text"
                     value={workspaceName}
-                    onChange={(e) => setWorkspaceName(e.target.value)}
+                    onChange={(e) => {
+                      setWorkspaceName(e.target.value);
+                      if (step2Errors.workspaceName) {
+                        setStep2Errors(prev => ({ ...prev, workspaceName: '' }));
+                      }
+                    }}
                     placeholder="Intempt Technologies"
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-sm focus:outline-none focus:border-transparent text-gray-900 placeholder-gray-400"
+                    className="w-full px-4 border border-gray-300 rounded-sm focus:outline-none focus:border-transparent text-gray-900 placeholder-gray-400"
                     style={{ 
+                      height: '40px',
                       transition: 'all 0.2s',
+                      borderColor: step2Errors.workspaceName ? '#EF4444' : undefined,
                     }}
                     onFocus={(e) => {
                       e.target.style.borderColor = '#0080FF';
                       e.target.style.boxShadow = '0 0 0 2px rgba(0, 128, 255, 0.1)';
                     }}
                     onBlur={(e) => {
-                      e.target.style.borderColor = '#D1D5DB';
+                      e.target.style.borderColor = step2Errors.workspaceName ? '#EF4444' : '#D1D5DB';
                       e.target.style.boxShadow = 'none';
                     }}
                   />
+                  {step2Errors.workspaceName && (
+                    <p className="text-xs text-red-600 mt-1">{step2Errors.workspaceName}</p>
+                  )}
                 </div>
 
                 <div>
@@ -400,8 +626,9 @@ export default function Home() {
                     value={websiteUrl}
                     onChange={(e) => setWebsiteUrl(e.target.value)}
                     placeholder="yourcompany.com"
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-sm focus:outline-none focus:border-transparent text-gray-900 placeholder-gray-400"
+                    className="w-full px-4 border border-gray-300 rounded-sm focus:outline-none focus:border-transparent text-gray-900 placeholder-gray-400"
                     style={{ 
+                      height: '40px',
                       transition: 'all 0.2s',
                     }}
                     onFocus={(e) => {
@@ -418,33 +645,44 @@ export default function Home() {
 
                 <div>
                   <label htmlFor="workspaceSlug" className="block text-sm font-medium text-gray-900 mb-1">
-                    Workspace slug
+                    Workspace slug <span className="text-red-500">*</span>
                   </label>
                   <div className="flex items-center border border-gray-300 rounded-sm overflow-hidden"
                     style={{ 
                       transition: 'all 0.2s',
+                      borderColor: step2Errors.workspaceSlug ? '#EF4444' : undefined,
+                      height: '40px',
                     }}
                     onFocus={(e) => {
                       e.currentTarget.style.borderColor = '#0080FF';
                       e.currentTarget.style.boxShadow = '0 0 0 2px rgba(0, 128, 255, 0.1)';
                     }}
                     onBlur={(e) => {
-                      e.currentTarget.style.borderColor = '#D1D5DB';
+                      e.currentTarget.style.borderColor = step2Errors.workspaceSlug ? '#EF4444' : '#D1D5DB';
                       e.currentTarget.style.boxShadow = 'none';
                     }}
                   >
-                    <span className="px-4 py-2.5 bg-gray-50 text-gray-500 text-sm border-r border-gray-300">
+                    <span className="px-4 bg-gray-50 text-gray-500 text-sm border-r border-gray-300" style={{ height: '40px', display: 'flex', alignItems: 'center' }}>
                       app.intempt.com/
                     </span>
                     <input
                       id="workspaceSlug"
                       type="text"
                       value={workspaceSlug}
-                      onChange={(e) => setWorkspaceSlug(e.target.value)}
+                      onChange={(e) => {
+                        setWorkspaceSlug(e.target.value);
+                        if (step2Errors.workspaceSlug) {
+                          setStep2Errors(prev => ({ ...prev, workspaceSlug: '' }));
+                        }
+                      }}
                       placeholder="intempt"
-                      className="flex-1 px-4 py-2.5 focus:outline-none text-gray-900 placeholder-gray-400 border-none"
+                      className="flex-1 px-4 focus:outline-none text-gray-900 placeholder-gray-400 border-none"
+                      style={{ height: '40px' }}
                     />
                   </div>
+                  {step2Errors.workspaceSlug && (
+                    <p className="text-xs text-red-600 mt-1">{step2Errors.workspaceSlug}</p>
+                  )}
                   <p className="text-xs text-gray-500 mt-1">You can change this later in your workspace settings.</p>
                 </div>
 
@@ -477,7 +715,8 @@ export default function Home() {
                       type="text"
                       value="+1"
                       readOnly
-                      className="w-16 px-3 py-2.5 border border-gray-300 rounded-sm bg-gray-50 text-gray-700 text-center"
+                      className="w-16 px-3 border border-gray-300 rounded-sm bg-gray-50 text-gray-700 text-center"
+                      style={{ height: '40px' }}
                     />
                     <input
                       id="contactNumber"
@@ -485,8 +724,9 @@ export default function Home() {
                       value={contactNumber}
                       onChange={(e) => setContactNumber(e.target.value)}
                       placeholder="(555) 987-6543"
-                      className="flex-1 px-4 py-2.5 border border-gray-300 rounded-sm focus:outline-none focus:border-transparent text-gray-900 placeholder-gray-400"
+                      className="flex-1 px-4 border border-gray-300 rounded-sm focus:outline-none focus:border-transparent text-gray-900 placeholder-gray-400"
                       style={{ 
+                        height: '40px',
                         transition: 'all 0.2s',
                       }}
                       onFocus={(e) => {
@@ -669,13 +909,16 @@ export default function Home() {
               {/* HubSpot */}
               <div
                 onClick={() => toggleIntegration('hubspot')}
-                className="relative border rounded-sm p-4 cursor-pointer transition-all duration-300 flex flex-col items-center justify-center aspect-square"
-                style={{
-                  borderColor: selectedIntegrations.includes('hubspot') ? '#0080FF' : '#D1D5DB',
-                  backgroundColor: selectedIntegrations.includes('hubspot') ? 'rgba(0, 128, 255, 0.05)' : 'white',
-                  boxShadow: selectedIntegrations.includes('hubspot') ? '0 0 0 2px rgba(0, 128, 255, 0.2)' : 'none'
-                }}
+                className="relative border rounded-sm p-4 transition-all duration-300 flex flex-col items-center justify-center aspect-square"
+                style={getIntegrationCardStyle('hubspot')}
               >
+                {connectedIntegrations.includes('hubspot') && (
+                  <div className="absolute top-2 right-2 w-5 h-5 bg-blue-400 rounded-full flex items-center justify-center">
+                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                )}
                 <img 
                   src="https://cdn.brandfetch.io/hubspot.com?c=1idhE0Bg4BXpFRYkYnt" 
                   alt="HubSpot" 
@@ -687,14 +930,40 @@ export default function Home() {
 
               {/* Shopify */}
               <div
-                onClick={() => toggleIntegration('shopify')}
-                className="relative border rounded-sm p-4 cursor-pointer transition-all duration-300 flex flex-col items-center justify-center aspect-square"
+                onClick={() => {
+                  // Don't allow clicking if already connected
+                  if (!connectedIntegrations.includes('shopify')) {
+                    toggleIntegration('shopify');
+                  }
+                }}
+                className="relative border rounded-sm p-4 transition-all duration-300 flex flex-col items-center justify-center aspect-square"
                 style={{
-                  borderColor: selectedIntegrations.includes('shopify') ? '#0080FF' : '#D1D5DB',
-                  backgroundColor: selectedIntegrations.includes('shopify') ? 'rgba(0, 128, 255, 0.05)' : 'white',
-                  boxShadow: selectedIntegrations.includes('shopify') ? '0 0 0 2px rgba(0, 128, 255, 0.2)' : 'none'
+                  borderColor: connectedIntegrations.includes('shopify') 
+                    ? '#93C5FD' // Light blue for connected
+                    : selectedIntegrations.includes('shopify') 
+                    ? '#0080FF' 
+                    : '#D1D5DB',
+                  backgroundColor: connectedIntegrations.includes('shopify')
+                    ? 'rgba(147, 197, 253, 0.2)' // Light blue background
+                    : selectedIntegrations.includes('shopify') 
+                    ? 'rgba(0, 128, 255, 0.05)' 
+                    : 'white',
+                  boxShadow: connectedIntegrations.includes('shopify')
+                    ? '0 0 0 2px rgba(147, 197, 253, 0.3)'
+                    : selectedIntegrations.includes('shopify') 
+                    ? '0 0 0 2px rgba(0, 128, 255, 0.2)' 
+                    : 'none',
+                  cursor: connectedIntegrations.includes('shopify') ? 'not-allowed' : 'pointer',
+                  opacity: connectedIntegrations.includes('shopify') ? 0.7 : 1,
                 }}
               >
+                {connectedIntegrations.includes('shopify') && (
+                  <div className="absolute top-2 right-2 w-5 h-5 bg-blue-400 rounded-full flex items-center justify-center">
+                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                )}
                 <img 
                   src="https://cdn.brandfetch.io/shopify.com?c=1idhE0Bg4BXpFRYkYnt" 
                   alt="Shopify" 
@@ -707,13 +976,16 @@ export default function Home() {
               {/* Stripe */}
               <div
                 onClick={() => toggleIntegration('stripe')}
-                className="relative border rounded-sm p-4 cursor-pointer transition-all duration-300 flex flex-col items-center justify-center aspect-square"
-                style={{
-                  borderColor: selectedIntegrations.includes('stripe') ? '#0080FF' : '#D1D5DB',
-                  backgroundColor: selectedIntegrations.includes('stripe') ? 'rgba(0, 128, 255, 0.05)' : 'white',
-                  boxShadow: selectedIntegrations.includes('stripe') ? '0 0 0 2px rgba(0, 128, 255, 0.2)' : 'none'
-                }}
+                className="relative border rounded-sm p-4 transition-all duration-300 flex flex-col items-center justify-center aspect-square"
+                style={getIntegrationCardStyle('stripe')}
               >
+                {connectedIntegrations.includes('stripe') && (
+                  <div className="absolute top-2 right-2 w-5 h-5 bg-blue-400 rounded-full flex items-center justify-center">
+                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                )}
                 <img 
                   src="https://cdn.brandfetch.io/stripe.com?c=1idhE0Bg4BXpFRYkYnt" 
                   alt="Stripe" 
@@ -726,13 +998,16 @@ export default function Home() {
               {/* Sendgrid */}
               <div
                 onClick={() => toggleIntegration('sendgrid')}
-                className="relative border rounded-sm p-4 cursor-pointer transition-all duration-300 flex flex-col items-center justify-center aspect-square"
-                style={{
-                  borderColor: selectedIntegrations.includes('sendgrid') ? '#0080FF' : '#D1D5DB',
-                  backgroundColor: selectedIntegrations.includes('sendgrid') ? 'rgba(0, 128, 255, 0.05)' : 'white',
-                  boxShadow: selectedIntegrations.includes('sendgrid') ? '0 0 0 2px rgba(0, 128, 255, 0.2)' : 'none'
-                }}
+                className="relative border rounded-sm p-4 transition-all duration-300 flex flex-col items-center justify-center aspect-square"
+                style={getIntegrationCardStyle('sendgrid')}
               >
+                {connectedIntegrations.includes('sendgrid') && (
+                  <div className="absolute top-2 right-2 w-5 h-5 bg-blue-400 rounded-full flex items-center justify-center">
+                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                )}
                 <img 
                   src="https://cdn.brandfetch.io/sendgrid.com?c=1idhE0Bg4BXpFRYkYnt" 
                   alt="Sendgrid" 
@@ -745,13 +1020,16 @@ export default function Home() {
               {/* Twilio */}
               <div
                 onClick={() => toggleIntegration('twilio')}
-                className="relative border rounded-sm p-4 cursor-pointer transition-all duration-300 flex flex-col items-center justify-center aspect-square"
-                style={{
-                  borderColor: selectedIntegrations.includes('twilio') ? '#0080FF' : '#D1D5DB',
-                  backgroundColor: selectedIntegrations.includes('twilio') ? 'rgba(0, 128, 255, 0.05)' : 'white',
-                  boxShadow: selectedIntegrations.includes('twilio') ? '0 0 0 2px rgba(0, 128, 255, 0.2)' : 'none'
-                }}
+                className="relative border rounded-sm p-4 transition-all duration-300 flex flex-col items-center justify-center aspect-square"
+                style={getIntegrationCardStyle('twilio')}
               >
+                {connectedIntegrations.includes('twilio') && (
+                  <div className="absolute top-2 right-2 w-5 h-5 bg-blue-400 rounded-full flex items-center justify-center">
+                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                )}
                 <img 
                   src="https://cdn.brandfetch.io/twilio.com?c=1idhE0Bg4BXpFRYkYnt" 
                   alt="Twilio" 
@@ -764,13 +1042,16 @@ export default function Home() {
               {/* Slack */}
               <div
                 onClick={() => toggleIntegration('slack')}
-                className="relative border rounded-sm p-4 cursor-pointer transition-all duration-300 flex flex-col items-center justify-center aspect-square"
-                style={{
-                  borderColor: selectedIntegrations.includes('slack') ? '#0080FF' : '#D1D5DB',
-                  backgroundColor: selectedIntegrations.includes('slack') ? 'rgba(0, 128, 255, 0.05)' : 'white',
-                  boxShadow: selectedIntegrations.includes('slack') ? '0 0 0 2px rgba(0, 128, 255, 0.2)' : 'none'
-                }}
+                className="relative border rounded-sm p-4 transition-all duration-300 flex flex-col items-center justify-center aspect-square"
+                style={getIntegrationCardStyle('slack')}
               >
+                {connectedIntegrations.includes('slack') && (
+                  <div className="absolute top-2 right-2 w-5 h-5 bg-blue-400 rounded-full flex items-center justify-center">
+                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                )}
                 <img 
                   src="https://cdn.brandfetch.io/slack.com?c=1idhE0Bg4BXpFRYkYnt" 
                   alt="Slack" 
@@ -783,13 +1064,16 @@ export default function Home() {
               {/* Gmail */}
               <div
                 onClick={() => toggleIntegration('gmail')}
-                className="relative border rounded-sm p-4 cursor-pointer transition-all duration-300 flex flex-col items-center justify-center aspect-square"
-                style={{
-                  borderColor: selectedIntegrations.includes('gmail') ? '#0080FF' : '#D1D5DB',
-                  backgroundColor: selectedIntegrations.includes('gmail') ? 'rgba(0, 128, 255, 0.05)' : 'white',
-                  boxShadow: selectedIntegrations.includes('gmail') ? '0 0 0 2px rgba(0, 128, 255, 0.2)' : 'none'
-                }}
+                className="relative border rounded-sm p-4 transition-all duration-300 flex flex-col items-center justify-center aspect-square"
+                style={getIntegrationCardStyle('gmail')}
               >
+                {connectedIntegrations.includes('gmail') && (
+                  <div className="absolute top-2 right-2 w-5 h-5 bg-blue-400 rounded-full flex items-center justify-center">
+                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                )}
                 <img 
                   src="https://cdn.brandfetch.io/gmail.com?c=1idhE0Bg4BXpFRYkYnt" 
                   alt="Gmail" 
@@ -802,13 +1086,16 @@ export default function Home() {
               {/* Android */}
               <div
                 onClick={() => toggleIntegration('android')}
-                className="relative border rounded-sm p-4 cursor-pointer transition-all duration-300 flex flex-col items-center justify-center aspect-square"
-                style={{
-                  borderColor: selectedIntegrations.includes('android') ? '#0080FF' : '#D1D5DB',
-                  backgroundColor: selectedIntegrations.includes('android') ? 'rgba(0, 128, 255, 0.05)' : 'white',
-                  boxShadow: selectedIntegrations.includes('android') ? '0 0 0 2px rgba(0, 128, 255, 0.2)' : 'none'
-                }}
+                className="relative border rounded-sm p-4 transition-all duration-300 flex flex-col items-center justify-center aspect-square"
+                style={getIntegrationCardStyle('android')}
               >
+                {connectedIntegrations.includes('android') && (
+                  <div className="absolute top-2 right-2 w-5 h-5 bg-blue-400 rounded-full flex items-center justify-center">
+                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                )}
                 <img 
                   src="https://cdn.brandfetch.io/android.com?c=1idhE0Bg4BXpFRYkYnt" 
                   alt="Android" 
@@ -821,13 +1108,16 @@ export default function Home() {
               {/* iOS */}
               <div
                 onClick={() => toggleIntegration('ios')}
-                className="relative border rounded-sm p-4 cursor-pointer transition-all duration-300 flex flex-col items-center justify-center aspect-square"
-                style={{
-                  borderColor: selectedIntegrations.includes('ios') ? '#0080FF' : '#D1D5DB',
-                  backgroundColor: selectedIntegrations.includes('ios') ? 'rgba(0, 128, 255, 0.05)' : 'white',
-                  boxShadow: selectedIntegrations.includes('ios') ? '0 0 0 2px rgba(0, 128, 255, 0.2)' : 'none'
-                }}
+                className="relative border rounded-sm p-4 transition-all duration-300 flex flex-col items-center justify-center aspect-square"
+                style={getIntegrationCardStyle('ios')}
               >
+                {connectedIntegrations.includes('ios') && (
+                  <div className="absolute top-2 right-2 w-5 h-5 bg-blue-400 rounded-full flex items-center justify-center">
+                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                )}
                 <img 
                   src="https://cdn.brandfetch.io/apple.com?c=1idhE0Bg4BXpFRYkYnt" 
                   alt="iOS" 
@@ -840,13 +1130,16 @@ export default function Home() {
               {/* Web */}
               <div
                 onClick={() => toggleIntegration('web')}
-                className="relative border rounded-sm p-4 cursor-pointer transition-all duration-300 flex flex-col items-center justify-center aspect-square"
-                style={{
-                  borderColor: selectedIntegrations.includes('web') ? '#0080FF' : '#D1D5DB',
-                  backgroundColor: selectedIntegrations.includes('web') ? 'rgba(0, 128, 255, 0.05)' : 'white',
-                  boxShadow: selectedIntegrations.includes('web') ? '0 0 0 2px rgba(0, 128, 255, 0.2)' : 'none'
-                }}
+                className="relative border rounded-sm p-4 transition-all duration-300 flex flex-col items-center justify-center aspect-square"
+                style={getIntegrationCardStyle('web')}
               >
+                {connectedIntegrations.includes('web') && (
+                  <div className="absolute top-2 right-2 w-5 h-5 bg-blue-400 rounded-full flex items-center justify-center">
+                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                )}
                 <div className="w-12 h-12 mb-2 flex items-center justify-center bg-yellow-400 rounded-sm">
                   <span className="text-2xl font-bold text-black">JS</span>
                 </div>
@@ -857,13 +1150,16 @@ export default function Home() {
               {/* Node.JS */}
               <div
                 onClick={() => toggleIntegration('nodejs')}
-                className="relative border rounded-sm p-4 cursor-pointer transition-all duration-300 flex flex-col items-center justify-center aspect-square"
-                style={{
-                  borderColor: selectedIntegrations.includes('nodejs') ? '#0080FF' : '#D1D5DB',
-                  backgroundColor: selectedIntegrations.includes('nodejs') ? 'rgba(0, 128, 255, 0.05)' : 'white',
-                  boxShadow: selectedIntegrations.includes('nodejs') ? '0 0 0 2px rgba(0, 128, 255, 0.2)' : 'none'
-                }}
+                className="relative border rounded-sm p-4 transition-all duration-300 flex flex-col items-center justify-center aspect-square"
+                style={getIntegrationCardStyle('nodejs')}
               >
+                {connectedIntegrations.includes('nodejs') && (
+                  <div className="absolute top-2 right-2 w-5 h-5 bg-blue-400 rounded-full flex items-center justify-center">
+                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                )}
                 <img 
                   src="https://cdn.brandfetch.io/nodejs.org?c=1idhE0Bg4BXpFRYkYnt" 
                   alt="Node.JS" 
@@ -876,13 +1172,16 @@ export default function Home() {
               {/* API */}
               <div
                 onClick={() => toggleIntegration('api')}
-                className="relative border rounded-sm p-4 cursor-pointer transition-all duration-300 flex flex-col items-center justify-center aspect-square"
-                style={{
-                  borderColor: selectedIntegrations.includes('api') ? '#0080FF' : '#D1D5DB',
-                  backgroundColor: selectedIntegrations.includes('api') ? 'rgba(0, 128, 255, 0.05)' : 'white',
-                  boxShadow: selectedIntegrations.includes('api') ? '0 0 0 2px rgba(0, 128, 255, 0.2)' : 'none'
-                }}
+                className="relative border rounded-sm p-4 transition-all duration-300 flex flex-col items-center justify-center aspect-square"
+                style={getIntegrationCardStyle('api')}
               >
+                {connectedIntegrations.includes('api') && (
+                  <div className="absolute top-2 right-2 w-5 h-5 bg-blue-400 rounded-full flex items-center justify-center">
+                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                )}
                 <div className="w-12 h-12 mb-2 flex items-center justify-center bg-blue-500 rounded-sm">
                   <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -924,8 +1223,34 @@ export default function Home() {
   return (
                   <div 
                     key={toolKey}
-                    className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 border border-gray-200 rounded-sm bg-white gap-3"
+                    className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 border border-gray-200 rounded-sm bg-white gap-3"
                   >
+                    {/* Close/Remove Button - Blue bubble on corner */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveIntegration(toolKey);
+                      }}
+                      className="absolute -top-2 -right-2 w-6 h-6 flex items-center justify-center rounded-full transition-colors shadow-sm z-10"
+                      style={{ backgroundColor: '#0080FF' }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#0066CC'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#0080FF'}
+                      aria-label="Remove integration"
+                    >
+                      <svg 
+                        className="w-3.5 h-3.5 text-white" 
+                        fill="none" 
+                        stroke="currentColor" 
+                        viewBox="0 0 24 24"
+                        strokeWidth={2.5}
+                      >
+                        <path 
+                          strokeLinecap="round" 
+                          strokeLinejoin="round" 
+                          d="M6 18L18 6M6 6l12 12" 
+                        />
+                      </svg>
+                    </button>
                     <div className="flex items-start sm:items-center gap-4 flex-1">
                       {/* Logo */}
                       <div className="w-12 h-12 flex items-center justify-center shrink-0">
@@ -2165,6 +2490,101 @@ export default function Home() {
           </Step>
         )}
       </Stepper>
+      </div>
+      {isLoading && <Loading />}
+
+      {/* Left Side - Features (Second on mobile, first on desktop) */}
+      <div className="w-full md:w-1/2 bg-white flex items-center justify-center p-8 md:p-16 order-2 md:order-1 overflow-y-auto">
+        <div className="max-w-xl w-full space-y-10">
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <img
+                src="/logo.png"
+                alt="Logo"
+                className="h-8 w-auto"
+              />
+              <h1 className="text-3xl md:text-4xl font-bold text-gray-900 leading-tight">
+                Create your free account
+              </h1>
+            </div>
+            <p className="text-base md:text-lg text-gray-600 leading-relaxed">
+              Explore powerful AI-driven features for sales and marketing teams.
+            </p>
+          </div>
+          
+          <div className="space-y-5">
+            <div className="flex items-start gap-4">
+              <div className="shrink-0 mt-0.5">
+                <div className="w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: '#0080FF' }}>
+                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-base font-semibold text-gray-900 mb-1.5">AI-Powered Sales Assistant</h3>
+                <p className="text-sm text-gray-600 leading-relaxed">Get intelligent email drafts and meeting prep from Blu.</p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-4">
+              <div className="shrink-0 mt-0.5">
+                <div className="w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: '#0080FF' }}>
+                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-base font-semibold text-gray-900 mb-1.5">Smart CRM & Pipeline</h3>
+                <p className="text-sm text-gray-600 leading-relaxed">Track deals, contacts, and revenue effortlessly.</p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-4">
+              <div className="shrink-0 mt-0.5">
+                <div className="w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: '#0080FF' }}>
+                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-base font-semibold text-gray-900 mb-1.5">Automated Workflows</h3>
+                <p className="text-sm text-gray-600 leading-relaxed">Save hours with AI-driven task automation.</p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-4">
+              <div className="shrink-0 mt-0.5">
+                <div className="w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: '#0080FF' }}>
+                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-base font-semibold text-gray-900 mb-1.5">Analytics & Insights</h3>
+                <p className="text-sm text-gray-600 leading-relaxed">Data-driven decisions with real-time dashboards.</p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-4">
+              <div className="shrink-0 mt-0.5">
+                <div className="w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: '#0080FF' }}>
+                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-base font-semibold text-gray-900 mb-1.5">Team Collaboration</h3>
+                <p className="text-sm text-gray-600 leading-relaxed">Work together seamlessly with your entire team.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Toast Message */}
       <AnimatePresence>
