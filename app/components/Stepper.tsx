@@ -94,9 +94,11 @@ export default function Stepper({
         if (!canContinue) {
           return; // Don't proceed if validation fails
         }
+        // onStepContinue handles navigation internally, so we don't update step here
+      } else {
+        setDirection(1);
+        updateStep(currentStep + 1);
       }
-      setDirection(1);
-      updateStep(currentStep + 1);
     }
   };
 
@@ -162,17 +164,19 @@ export default function Stepper({
             </div>
           </div>
 
-          <div className="stepper-scroll flex-1 overflow-y-auto px-2">
-            <StepContentWrapper
-              isCompleted={isCompleted}
-              currentStep={currentStep}
-              direction={direction}
-              className={`space-y-2 px-4 sm:px-8 w-full max-w-3xl mx-auto ${contentClassName}`}
-            >
-              <div className="w-full">
-                {stepsArray[currentStep - 1]}
-              </div>
-            </StepContentWrapper>
+          <div className="stepper-scroll flex-1 overflow-y-auto px-2 flex">
+            <div className={`w-full min-h-full py-8 ${(currentStep === 2 || currentStep === 5) ? '' : 'flex items-center justify-center'}`}>
+              <StepContentWrapper
+                isCompleted={isCompleted}
+                currentStep={currentStep}
+                direction={direction}
+                className={`space-y-2 px-4 sm:px-8 w-full max-w-3xl mx-auto ${contentClassName}`}
+              >
+                <div className="w-full">
+                  {stepsArray[currentStep - 1]}
+                </div>
+              </StepContentWrapper>
+            </div>
           </div>
 
           {!isCompleted && (

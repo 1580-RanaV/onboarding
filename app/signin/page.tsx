@@ -64,7 +64,7 @@ export default function SignInPage() {
               <span>Continue with Google</span>
             </button>
 
-            <button className="w-full flex items-center justify-center gap-3 rounded-md bg-[#2563eb] hover:bg-[#1d4ed8] px-3 py-2 text-sm font-semibold text-white transition-colors shadow-sm shadow-[#1d4ed8]/40">
+            <button className="w-full flex items-center justify-center gap-3 rounded-md bg-[#0080FF] hover:bg-[#0066CC] px-3 py-2 text-sm font-semibold text-white transition-colors shadow-sm shadow-[#1d4ed8]/40">
               <svg viewBox="0 0 20 20" aria-hidden="true" className="w-5 h-5" focusable="false">
                 <rect width="9" height="9" x="1" y="1" fill="#f35325" rx="1" />
                 <rect width="9" height="9" x="10" y="1" fill="#81bc06" rx="1" />

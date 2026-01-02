@@ -7,7 +7,7 @@ import Stepper, { Step } from './components/Stepper';
 import { sellerPersonas } from './data/sellerPersonas';
 import { buyerPersonas } from './data/buyerPersonas';
 import { step1Schema, step2Schema } from './lib/validation';
-import Loading from './components/Loading';
+import { SkeletonInput, SkeletonLabel, SkeletonButton, SkeletonCard } from './components/SkeletonLoader';
 import WorkspaceError from './components/WorkspaceError';
 
 export default function Home() {
@@ -44,10 +44,14 @@ export default function Home() {
   const [inviteLink] = useState('https://app.intempt.com/invite?code=522c8ffc');
   const salesPathDisabled = true;
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingStep, setLoadingStep] = useState<number | null>(null); // Track which step is being loaded
   const [isOrganizationCreated, setIsOrganizationCreated] = useState(false);
   const [step2Errors, setStep2Errors] = useState<Record<string, string>>({});
   const [step1Errors, setStep1Errors] = useState<Record<string, string>>({});
   const [currentStep, setCurrentStep] = useState(1);
+  const [completedSteps, setCompletedSteps] = useState<number[]>([]);
+  const [sessionKey, setSessionKey] = useState(0); // Key for resetting animation
+  const [showWorkspaceConfirmModal, setShowWorkspaceConfirmModal] = useState(false);
 
   // Get the currently selected buyer persona details
   const currentBuyerPersona = buyerPersonas.find(p => p.id === selectedBuyerPersona);
@@ -60,6 +64,8 @@ export default function Home() {
     const orgCreated = localStorage.getItem('organizationCreated');
     if (orgCreated === 'true') {
       setIsOrganizationCreated(true);
+      // Mark steps 1 and 2 as completed if organization already created
+      setCompletedSteps([1, 2]);
       // Redirect to step 3 if organization already created
       setCurrentStep(3);
     }
@@ -264,75 +270,211 @@ export default function Home() {
 
   // Handle step continuation with validation and loading
   const handleStepContinue = async (step: number): Promise<boolean> => {
+    // Validate before proceeding
+    if (step === 1) {
+      const isValid = validateStep1();
+      if (!isValid) {
+        return false;
+      }
+    }
+    
+    if (step === 2) {
+      const isValid = validateStep2();
+      if (!isValid) {
+        return false;
+      }
+      // Show confirmation modal for step 2 before proceeding
+      setShowWorkspaceConfirmModal(true);
+      return false; // Don't proceed yet, wait for confirmation
+    }
+    
+    // If validation passes, start loading and navigate immediately
     setIsLoading(true);
+    // Set the next step as loading (step + 1)
+    setLoadingStep(step + 1);
+    // Immediately navigate to next step to show skeleton
+    setCurrentStep(step + 1);
     
     try {
-      // Validate step 1 before proceeding
+      // Mark steps as completed
       if (step === 1) {
-        const isValid = validateStep1();
-        if (!isValid) {
-          setIsLoading(false);
-          return false;
-        }
+        setCompletedSteps(prev => [...prev, 1]);
       }
       
-      // Validate step 2 before proceeding
-      if (step === 2) {
-        const isValid = validateStep2();
-        if (!isValid) {
-          setIsLoading(false);
-          return false;
-        }
-        // Mark organization as created
-        setIsOrganizationCreated(true);
-        localStorage.setItem('organizationCreated', 'true');
+      if (step === 3) {
+        setCompletedSteps(prev => [...prev, 3]);
+      }
+      
+      if (step === 3) {
+        setCompletedSteps(prev => [...prev, 3]);
       }
       
       // Simulate API call or processing
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Minimum 500ms to show skeleton loader
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       return true;
     } catch (error) {
       console.error('Error:', error);
       setIsLoading(false);
+      setLoadingStep(null);
+      // Revert to previous step on error
+      setCurrentStep(step);
       return false;
     } finally {
       setIsLoading(false);
+      setLoadingStep(null);
     }
   };
 
-  // Handle step back navigation - prevent going back to step 1 or 2 if organization is created
+  // Handle step back navigation - prevent going back to completed steps
   const handleStepBack = async (step: number): Promise<boolean> => {
-    // If trying to go back to step 1 or 2 when organization is created
-    if (isOrganizationCreated && (step === 2 || step === 3)) {
-      // If current step is 3, trying to go to step 2
-      // If current step is 2, trying to go to step 1
-      setToastMessage('The workspace has already been created. You cannot go back to modify it.');
+    // Calculate the step we're trying to go back to (current step - 1)
+    const targetStep = step - 1;
+    
+    // Prevent going back to any completed step
+    if (completedSteps.includes(targetStep)) {
+      // Show workspace creation error for step 2
+      if (targetStep === 2) {
+        setToastMessage('The workspace has already been created. You cannot create multiple workspaces.');
+      } else {
+        setToastMessage(`You cannot go back to step ${targetStep} as it has already been completed.`);
+      }
       // Auto-dismiss toast after 4 seconds
       setTimeout(() => {
         setToastMessage(null);
       }, 4000);
       return false; // Prevent navigation
     }
+    
     return true; // Allow navigation
   };
 
   // Check if user can navigate to a specific step
   const canNavigateToStep = (step: number): boolean => {
-    // Prevent navigating to step 1 or 2 if organization is already created
-    if (isOrganizationCreated && (step === 1 || step === 2)) {
-      setToastMessage('The workspace has already been created. You cannot go back to modify it.');
+    // Prevent navigating to any completed step
+    if (completedSteps.includes(step)) {
+      // Show workspace creation error for step 2
+      if (step === 2) {
+        setToastMessage('The workspace has already been created. You cannot create multiple workspaces.');
+      } else {
+        setToastMessage(`You cannot go back to step ${step} as it has already been completed.`);
+      }
       // Auto-dismiss toast after 4 seconds
       setTimeout(() => {
         setToastMessage(null);
       }, 4000);
       return false;
     }
+    
+    // Prevent navigating to steps ahead of current step
+    // User can only go to the next step if current step is completed
+    if (step > currentStep) {
+      // Check if current step is completed
+      if (!completedSteps.includes(currentStep)) {
+        setToastMessage(`Please complete step ${currentStep} before proceeding to step ${step}.`);
+        setTimeout(() => {
+          setToastMessage(null);
+        }, 4000);
+        return false;
+      }
+      // Only allow going to the immediate next step
+      if (step !== currentStep + 1) {
+        setToastMessage(`You can only proceed to step ${currentStep + 1} after completing step ${currentStep}.`);
+        setTimeout(() => {
+          setToastMessage(null);
+        }, 4000);
+        return false;
+      }
+    }
+    
     return true;
   };
 
+  // Confirm and proceed from step 2 to step 3
+  const confirmWorkspaceCreation = async () => {
+    setShowWorkspaceConfirmModal(false);
+    
+    // Start loading and navigate to step 3
+    setIsLoading(true);
+    setLoadingStep(3);
+    setCurrentStep(3);
+    
+    try {
+      // Mark step 2 as completed
+      setCompletedSteps(prev => [...prev, 2]);
+      setIsOrganizationCreated(true);
+      localStorage.setItem('organizationCreated', 'true');
+      
+      // Simulate API call or processing
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      setIsLoading(false);
+      setLoadingStep(null);
+    } catch (error) {
+      console.error('Error:', error);
+      setIsLoading(false);
+      setLoadingStep(null);
+      setCurrentStep(2);
+    }
+  };
+
+  // Reset form and start new session
+  const resetToNewSession = () => {
+    // Reset all form fields
+    setFullName('');
+    setEmail('');
+    setAgreeToTerms(false);
+    setCompanySearch('');
+    setWorkspaceName('');
+    setWebsiteUrl('');
+    setWorkspaceSlug('');
+    setContactNumber('');
+    setSelectedPath(null);
+    setSelectedIntegrations([]);
+    setConnectedIntegrations([]);
+    setSelectedSellerPersona('outbound');
+    setSelectedCommunicationStyle(null);
+    setTargetAudience('');
+    setLinkedinUrls([]);
+    setBrandUSP('');
+    setOfferResults('');
+    setCompetitiveLandscape('');
+    setSelectedBuyerPersona('scrappy-scaler');
+    setTeamEmails(['']);
+    setStep1Errors({});
+    setStep2Errors({});
+    setActiveMethodologyTab('outreach');
+    setActiveTipsLetter('T');
+    setActiveAceLetter('A');
+    setActiveEmailTab('structure');
+    setSelectedEmailProvider(null);
+    setShowConnectModal(false);
+    setCurrentConnectingTool(null);
+    setApiKey('');
+    setGmailAuthStep('options');
+    setToastMessage(null);
+    setIsLoading(false);
+    setLoadingStep(null);
+    
+    // Reset state
+    setCompletedSteps([]);
+    setIsOrganizationCreated(false);
+    localStorage.removeItem('organizationCreated');
+    
+    // Reset to step 1 and trigger fade-in animation by changing key
+    setCurrentStep(1);
+    setSessionKey(prev => prev + 1); // Change key to trigger fresh animation
+  };
+
   return (
-    <div className="min-h-screen bg-white flex flex-col md:flex-row md:overflow-hidden md:h-screen">
+    <motion.div 
+      key={sessionKey}
+      className="min-h-screen bg-white flex flex-col md:flex-row md:overflow-hidden md:h-screen"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.5, ease: 'easeInOut' }}
+    >
       {/* Right Side - Stepper (First on mobile, second on desktop) */}
       <div className="w-full md:w-1/2 bg-white md:h-screen order-1 md:order-2 shrink-0">
         <Stepper
@@ -340,6 +482,8 @@ export default function Home() {
           stepValidations={getStepValidations()}
           onFinalStepCompleted={() => {
             console.log('Onboarding completed!');
+            // Reset and start new session with fade-in animation
+            resetToNewSession();
           }}
           onStepContinue={handleStepContinue}
           onStepBack={handleStepBack}
@@ -394,75 +538,94 @@ export default function Home() {
 
             {/* Form Fields */}
             <div className="space-y-4">
-              <div>
-                <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-1">
-                  Full name
-                </label>
-                <input
-                  id="fullName"
-                  type="text"
-                  value={fullName}
-                  onChange={(e) => {
-                    setFullName(e.target.value);
-                    if (step1Errors.fullName) {
-                      setStep1Errors(prev => ({ ...prev, fullName: '' }));
-                    }
-                  }}
-                  placeholder="John Doe"
-                  className="w-full px-4 border border-gray-300 rounded-sm focus:outline-none focus:border-transparent text-gray-900 placeholder-gray-400"
-                  style={{ 
-                    height: '40px',
-                    transition: 'all 0.2s',
-                    borderColor: step1Errors.fullName ? '#EF4444' : undefined,
-                  }}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = '#0080FF';
-                    e.target.style.boxShadow = '0 0 0 2px rgba(0, 128, 255, 0.1)';
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = step1Errors.fullName ? '#EF4444' : '#D1D5DB';
-                    e.target.style.boxShadow = 'none';
-                  }}
-                />
-                {step1Errors.fullName && (
-                  <p className="text-xs text-red-600 mt-1">{step1Errors.fullName}</p>
-                )}
-              </div>
+              {loadingStep === 2 ? (
+                <>
+                  <div>
+                    <SkeletonLabel />
+                    <SkeletonInput />
+                  </div>
+                  <div>
+                    <SkeletonLabel />
+                    <SkeletonInput />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <SkeletonInput />
+                    <SkeletonLabel />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-1">
+                      Full name
+                    </label>
+                    <input
+                      id="fullName"
+                      type="text"
+                      value={fullName}
+                      onChange={(e) => {
+                        setFullName(e.target.value);
+                        if (step1Errors.fullName) {
+                          setStep1Errors(prev => ({ ...prev, fullName: '' }));
+                        }
+                      }}
+                      placeholder="John Doe"
+                      className="w-full px-4 border border-gray-300 rounded-sm focus:outline-none focus:border-transparent text-gray-900 placeholder-gray-400"
+                      style={{ 
+                        height: '40px',
+                        transition: 'all 0.2s',
+                        borderColor: step1Errors.fullName ? '#EF4444' : undefined,
+                      }}
+                      onFocus={(e) => {
+                        e.target.style.borderColor = '#0080FF';
+                        e.target.style.boxShadow = '0 0 0 2px rgba(0, 128, 255, 0.1)';
+                      }}
+                      onBlur={(e) => {
+                        e.target.style.borderColor = step1Errors.fullName ? '#EF4444' : '#D1D5DB';
+                        e.target.style.boxShadow = 'none';
+                      }}
+                    />
+                    {step1Errors.fullName && (
+                      <p className="text-xs text-red-600 mt-1">{step1Errors.fullName}</p>
+                    )}
+                  </div>
 
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                  Email
-                </label>
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value);
-                    if (step1Errors.email) {
-                      setStep1Errors(prev => ({ ...prev, email: '' }));
-                    }
-                  }}
-                  placeholder="you@example.com"
-                  className="w-full px-4 border border-gray-300 rounded-sm focus:outline-none focus:border-transparent text-gray-900 placeholder-gray-400"
-                  style={{ 
-                    height: '40px',
-                    transition: 'all 0.2s',
-                    borderColor: step1Errors.email ? '#EF4444' : undefined,
-                  }}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = '#0080FF';
-                    e.target.style.boxShadow = '0 0 0 2px rgba(0, 128, 255, 0.1)';
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = step1Errors.email ? '#EF4444' : '#D1D5DB';
-                    e.target.style.boxShadow = 'none';
-                  }}
-                />
-                {step1Errors.email && (
-                  <p className="text-xs text-red-600 mt-1">{step1Errors.email}</p>
-                )}
-              </div>
+                  <div>
+                    <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                      Email
+                    </label>
+                    <input
+                      id="email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        if (step1Errors.email) {
+                          setStep1Errors(prev => ({ ...prev, email: '' }));
+                        }
+                      }}
+                      placeholder="you@example.com"
+                      className="w-full px-4 border border-gray-300 rounded-sm focus:outline-none focus:border-transparent text-gray-900 placeholder-gray-400"
+                      style={{ 
+                        height: '40px',
+                        transition: 'all 0.2s',
+                        borderColor: step1Errors.email ? '#EF4444' : undefined,
+                      }}
+                      onFocus={(e) => {
+                        e.target.style.borderColor = '#0080FF';
+                        e.target.style.boxShadow = '0 0 0 2px rgba(0, 128, 255, 0.1)';
+                      }}
+                      onBlur={(e) => {
+                        e.target.style.borderColor = step1Errors.email ? '#EF4444' : '#D1D5DB';
+                        e.target.style.boxShadow = 'none';
+                      }}
+                    />
+                    {step1Errors.email && (
+                      <p className="text-xs text-red-600 mt-1">{step1Errors.email}</p>
+                    )}
+                  </div>
+                </>
+              )}
         </div>
 
             {/* Terms Checkbox */}
@@ -580,6 +743,41 @@ export default function Home() {
                 <h2 className="text-2xl font-semibold text-gray-900">Review and customize your workspace details.</h2>
               </div>
 
+              {loadingStep === 3 ? (
+                <div className="space-y-5">
+                  <div>
+                    <SkeletonLabel />
+                    <SkeletonInput />
+                  </div>
+                  <div>
+                    <SkeletonLabel />
+                    <SkeletonInput />
+                  </div>
+                  <div>
+                    <SkeletonLabel />
+                    <SkeletonInput />
+                  </div>
+                  <div>
+                    <SkeletonLabel />
+                    <div className="p-4 border border-gray-300 rounded-sm">
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-2">
+                          <div className="h-4 bg-gray-200 rounded w-24 animate-pulse" />
+                          <div className="h-3 bg-gray-200 rounded w-32 animate-pulse" />
+                        </div>
+                        <SkeletonButton />
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <SkeletonLabel />
+                    <div className="flex gap-2">
+                      <div className="w-16 h-10 bg-gray-200 rounded-sm animate-pulse" />
+                      <SkeletonInput />
+                    </div>
+                  </div>
+                </div>
+              ) : (
               <div className="space-y-5">
                 <div>
                   <label htmlFor="workspaceName" className="block text-sm font-medium text-gray-900 mb-1">
@@ -742,6 +940,7 @@ export default function Home() {
                   <p className="text-xs text-gray-500 mt-1">For account recovery and notifications</p>
                 </div>
               </div>
+              )}
             </div>
           </div>
         </Step>
@@ -755,6 +954,12 @@ export default function Home() {
             </div>
 
             {/* Path Options - Side by Side */}
+            {loadingStep === 4 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 px-2">
+                <SkeletonCard />
+                <SkeletonCard />
+              </div>
+            ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 px-2">
               {/* Marketer Option */}
               <div
@@ -886,9 +1091,10 @@ export default function Home() {
                 </button>
               </div>
             </div>
+            )}
 
             {/* Helper Text */}
-            {!selectedPath && (
+            {!selectedPath && !loadingStep && (
               <p className="text-center text-sm" style={{ color: '#EF4444' }}>Select a path</p>
             )}
           </div>
@@ -2491,7 +2697,6 @@ export default function Home() {
         )}
       </Stepper>
       </div>
-      {isLoading && <Loading />}
 
       {/* Left Side - Features (Second on mobile, first on desktop) */}
       <div className="w-full md:w-1/2 bg-white flex items-center justify-center p-8 md:p-16 order-2 md:order-1 overflow-y-auto">
@@ -2583,6 +2788,20 @@ export default function Home() {
               </div>
             </div>
           </div>
+
+          {/* Footer Links */}
+          <div className="text-center space-y-2 pt-8">
+            <div className="flex flex-wrap items-center justify-center gap-4 text-xs" style={{ color: '#6B7280' }}>
+              <a href="#" className="hover:underline">Terms</a>
+              <a href="#" className="hover:underline">Privacy</a>
+              <a href="#" className="hover:underline">Docs</a>
+              <a href="#" className="hover:underline">Contact Support</a>
+              <a href="#" className="hover:underline">Manage cookies</a>
+            </div>
+            <div className="text-xs" style={{ color: '#6B7280' }}>
+              <a href="#" className="hover:underline">Do not share my personal information</a>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -2602,6 +2821,80 @@ export default function Home() {
               </svg>
             </div>
             <span className="text-sm font-medium text-gray-900">{toastMessage}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Workspace Confirmation Modal */}
+      <AnimatePresence>
+        {showWorkspaceConfirmModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 flex items-center justify-center"
+            style={{
+              zIndex: 1000,
+              backgroundColor: 'rgba(0, 0, 0, 0.3)',
+              backdropFilter: 'blur(8px)'
+            }}
+            onClick={() => setShowWorkspaceConfirmModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-sm p-6 max-w-lg w-full mx-4 shadow-xl"
+              onClick={(e: React.MouseEvent) => e.stopPropagation()}
+            >
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Confirm Workspace Details</h3>
+                  <p className="text-sm text-gray-600">
+                    Please review your workspace details. Once confirmed, these cannot be edited again.
+                  </p>
+                </div>
+
+                <div className="space-y-3 border-t border-gray-200 pt-4">
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 mb-1">Company</p>
+                    <p className="text-sm text-gray-900">{companySearch || 'Not provided'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 mb-1">Workspace Name</p>
+                    <p className="text-sm text-gray-900">{workspaceName || 'Not provided'}</p>
+                  </div>
+                  {/* {websiteUrl && (
+                    <div>
+                      <p className="text-xs font-medium text-gray-500 mb-1">Website URL</p>
+                      <p className="text-sm text-gray-900">{websiteUrl}</p>
+                    </div>
+                  )} */}
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 mb-1">Workspace Slug</p>
+                    <p className="text-sm text-gray-900">app.intempt.com/{workspaceSlug || 'Not provided'}</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-4 border-t border-gray-200">
+                  <button
+                    onClick={() => setShowWorkspaceConfirmModal(false)}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-sm text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmWorkspaceCreation}
+                    className="flex-1 px-4 py-2 rounded-sm text-sm font-medium text-white transition-colors"
+                    style={{ backgroundColor: '#0080FF' }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#0066CC'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#0080FF'}
+                  >
+                    Confirm & Continue
+                  </button>
+                </div>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -2892,6 +3185,6 @@ export default function Home() {
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </motion.div>
   );
 }
