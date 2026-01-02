@@ -291,8 +291,8 @@ export default function Home() {
             {/* Sign In Link */}
             <div className="text-center text-sm text-gray-600">
               Already have an account?{' '}
-              <a href="#" style={{ color: '#0080FF' }} className="hover:underline font-medium">
-                Sign in
+              <a href="/signin" style={{ color: '#0080FF' }} className="hover:underline font-medium">
+                Log In
           </a>
         </div>
           </div>
